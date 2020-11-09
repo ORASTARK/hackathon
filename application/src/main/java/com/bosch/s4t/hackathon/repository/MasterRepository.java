@@ -1,22 +1,23 @@
 package com.bosch.s4t.hackathon.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
-
-import com.bosch.s4t.hackathon.entity.DataEntity;
-import java.util.List;
+import com.bosch.s4t.hackathon.entity.MasterEntity;
 
 @Repository
-public interface DataRepository extends JpaRepository<DataEntity, Long> {
-	public List<DataEntity> findAllByOrderByFetchTimeDesc();
-/*	
-	@Query(
-			value = "select set_mac from data da where da.sequence = ?1 order by id desc limit 1",
-			nativeQuery =true)
-	public List<dataEntity> findBySequenceByOrderByIdDesc (String sequence);
+public interface MasterRepository extends JpaRepository<MasterEntity, Long> {
 	
-
+	
+	//public List<MasterEntity> findAllByIMac();
+	
+	@Query(
+			value = "select * from master m where m.i_mac like ?1",
+			nativeQuery =true)
+	public List<MasterEntity> findAllByIMac (String iMac);
+/*
 	List<PurchaseRequisitionItemEntity> findAllByOrderByIdAsc(Pageable page);
 	
 	//List<PurchaseRequisitionItemEntity> findAllByOrderByIdAsc(Pageable page);

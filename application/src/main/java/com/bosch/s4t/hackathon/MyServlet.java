@@ -18,9 +18,14 @@ import org.msgpack.core.MessageUnpacker;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.bosch.s4t.hackathon.repository.CurrentRepository;
 import com.bosch.s4t.hackathon.repository.DataRepository;
+import com.bosch.s4t.hackathon.repository.MasterRepository;
 import com.bosch.s4t.hackathon.DTO.DataDTO;
+import com.bosch.s4t.hackathon.entity.CurrentEntity;
 import com.bosch.s4t.hackathon.entity.DataEntity;
+import com.bosch.s4t.hackathon.entity.MasterEntity;
+
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -29,6 +34,12 @@ public class MyServlet extends HttpServlet {
 	
 	@Autowired
 	public DataRepository dataRepo;
+	
+	@Autowired
+	public CurrentRepository currentRepo;
+	
+	@Autowired
+	public MasterRepository masterRepo;
 	
 	private static final long serialVersionUID = -8685285401859800066L;
 	
@@ -40,7 +51,7 @@ public class MyServlet extends HttpServlet {
 	
 	@Override
 	public void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		System.out.println(">>>>>>>>>>doPost()<<<<<<<<<<<");
+		System.out.println(">>>>>>>>>> Collecting data <<<<<<<<<<<");
 		
 		InputStream in = request.getInputStream();
 		MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(in);
@@ -81,6 +92,8 @@ public class MyServlet extends HttpServlet {
 		
 		String[] macData = new String[arrHeader];
 		int[] rssiData = new int[arrHeader];
+		int rssiMin = 0;
+		String macMin = null; 
 		for(int i = 0; i < arrHeader; i++) {
 			int binaryHeader = unpacker.unpackBinaryHeader();
 			byte[] bytes = new byte[binaryHeader];
@@ -95,15 +108,61 @@ public class MyServlet extends HttpServlet {
 			System.out.println("rssiHex:" + i + ": " + rssiHex);
 			
 			rssiData[i]= 255 - Integer.parseInt(rssiHex,16);  	
-			System.out.println("rssiData[" + i + "]: " + rssiData[i]);		
+			System.out.println("rssiData[" + i + "]: " + rssiData[i]);	
 			
+			if(i==0) {
+				rssiMin = rssiData[0];
+				macMin = macData[0];
+			}
+			if ("EAC5B7C514F1".equals(macData[i]) || "E908C024BF5B".equals(macData[i]) || "DDF2BE0886E0".equals(macData[i]) || "E3B3C49220E7".equals(macData[i])) {
+				if (rssiData[i]<rssiMin) {
+					rssiMin = rssiData[i];
+					macMin = macData[i];
+				}
+			}
 			DataEntity dataEntity = new DataEntity();
 			dataEntity.setFetchTime(fetchTime);
 			dataEntity.setRssi(rssiData[i]);
 			dataEntity.setSentMac(macData[i]);
 			dataEntityList.add(dataEntity);
 		}
+		
+		
+		int totalRssi = 0;
+		int countRssi = 0;
+		for(int i=0;i<arrHeader;i++) {
+			if(dataEntityList.get(i).getSentMac().equals(macMin)) {
+				totalRssi += dataEntityList.get(i).getRssi();
+				countRssi += 1;
+			}
+		}
+		int rssiavg = totalRssi / countRssi;
+		
+		//1-1, 2-9,3-11,4-6
+		List<MasterEntity> masterEntityList = masterRepo.findAllByIMac(macMin);
+		MasterEntity currentMasterEntity = masterEntityList.get(0);
+		int currentSNum = 0;
+		//int currentRssi = currentMasterEntity.getICircle();
+		int checkSNum = currentMasterEntity.getSNum();
+		if(checkSNum !=0) {
+			if(rssiavg<50) {
+				currentSNum = currentMasterEntity.getSNum();
+			}else {
+				currentSNum = 0;
+			}
+		}else {
+			currentSNum = 0;
+		}
+		
+		
+		List<CurrentEntity> currentEntityList = new ArrayList<CurrentEntity>();
+		CurrentEntity currentEntity = new CurrentEntity();
+		currentEntity.setNum(currentSNum);
+		currentEntity.setFetchTime(fetchTime);
+		currentEntityList.add(currentEntity);
+	
 		dataRepo.saveAll(dataEntityList);
+		currentRepo.saveAll(currentEntityList);		
 		System.out.println("---------------------------------");
 		unpacker.close();
 	}
